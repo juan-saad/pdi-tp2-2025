@@ -113,16 +113,11 @@ plt.title("Componentes filtrados por área")
 plt.axis("off")
 plt.show()
 
+
+
 num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_filtrada, connectivity=8)
 
-kernel_aper = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
-img_open = cv2.morphologyEx(mask_filtrada, kernel=kernel_aper, op=cv2.MORPH_OPEN)
-plt.figure(figsize=(6,6))
-plt.imshow(img_open, cmap='gray')
-plt.title("Componentes filtrados por área")
-plt.axis("off")
-plt.show()
 
 areas = stats[1:, cv2.CC_STAT_AREA]  # todos menos el fondo
 moneda_10 = []
