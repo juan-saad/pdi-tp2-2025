@@ -59,8 +59,7 @@ mask_contornos = np.zeros_like(g1)
 # Dibujar los contornos en la máscara
 cv2.drawContours(mask_contornos, contours_filtrados, -1, 255, -1)
 
-mask_cerrada = cv2.threshold(mask_contornos, 127, 255, cv2.THRESH_BINARY)[1]
-edges = cv2.Canny(mask_cerrada, 50, 150)
+edges = cv2.Canny(mask_contornos, 50, 150)
 
 circles = cv2.HoughCircles(
     edges,
@@ -107,13 +106,18 @@ for label in range(1, num_labels):
         # Copiamos el componente a la máscara
         mask_filtrada[labels == label] = 255
 
+# Mostrar el resultado
+plt.figure(figsize=(6,6))
+plt.imshow(mask_filtrada, cmap='gray')
+plt.title("Componentes filtrados por área")
+plt.axis("off")
+plt.show()
 
-
+num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_filtrada, connectivity=8)
 
 kernel_aper = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
 img_open = cv2.morphologyEx(mask_filtrada, kernel=kernel_aper, op=cv2.MORPH_OPEN)
-
 plt.figure(figsize=(6,6))
 plt.imshow(img_open, cmap='gray')
 plt.title("Componentes filtrados por área")
