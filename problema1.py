@@ -27,42 +27,43 @@ IMAGE_PATH = BASE_DIR / "imagenes" / "monedas.jpg"
 
 
 img = cv2.imread(str(IMAGE_PATH))
+img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-se = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31))
-g3 = cv2.morphologyEx(img, kernel=se, op=cv2.MORPH_TOPHAT)
+# Top-hat
+kernel_tophat = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31))
+img_tophat = cv2.morphologyEx(img_gray, kernel=kernel_tophat, op=cv2.MORPH_TOPHAT)
+
+# Gradient
+kernel_grad = cv2.getStructuringElement(cv2.MORPH_RECT,(5,5))
+img_grad = cv2.morphologyEx(img_tophat, cv2.MORPH_GRADIENT, kernel_grad)
+
+# Binarización Otsu
+_ , img_bin = cv2.threshold(img_grad, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+img_bin = cv2.GaussianBlur(img_bin, (5, 5), 2)
 
 
-k = 5
-kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(k,k))
 
-fmg = cv2.morphologyEx(g3, cv2.MORPH_GRADIENT, kernel)
-
-
-img_gray = cv2.cvtColor(fmg, cv2.COLOR_BGR2GRAY)
-umbral, g1 = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-g1 = cv2.GaussianBlur(g1, (5, 5), 2)
-
-
-# --- Parámetros ---
-RHO_TH = 0.8        # umbral de circularidad
 MIN_AREA = 3000     # umbral de área mínimo
 
-# --- Obtengo contornos externos ---
-contours_3x3, hierarchy_3x3 = cv2.findContours(g1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+# contornos
+contours, hierarchy = cv2.findContours(img_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-# --- Filtro contornos por área ---
-contours_filtrados = [c for c in contours_3x3 if cv2.contourArea(c) >= MIN_AREA]
+# filtramos contornos por área
+contours_filtrados = [c for c in contours if cv2.contourArea(c) >= MIN_AREA]
 
-# Imagen del mismo tamaño que g1, toda en negro
-mask_contornos = np.zeros_like(g1)
+# imagen mismo tamaño que la original, para dibujar contornos
+mask_contornos = np.zeros_like(img_bin)
 
-# Dibujar los contornos en la máscara
+# dibujo de contornos filtrados
 cv2.drawContours(mask_contornos, contours_filtrados, -1, 255, -1)
 
-edges = cv2.Canny(mask_contornos, 50, 150)
+# aplico canny para diferenciar bordes
+contornos_canny = cv2.Canny(mask_contornos, 50, 150)
 
+
+# detección de círculos con Hough
 circles = cv2.HoughCircles(
-    edges,
+    contornos_canny,
     cv2.HOUGH_GRADIENT,
     dp=1.2,
     minDist=300,
@@ -72,14 +73,13 @@ circles = cv2.HoughCircles(
     maxRadius=200
 )
 
-img_hough = edges.copy()   # imagen para dibujar
+img_hough = contornos_canny.copy()  
 
 if circles is not None:
     circles = np.uint16(np.around(circles))
     for x, y, r in circles[0,:]:
-        cv2.circle(img_hough, (x, y), r, (255,255,255), -1)   # círculo relleno
+        cv2.circle(img_hough, (x, y), r, (255,255,255), -1)  
 
-# --- Mostrar ---
 plt.figure(figsize=(6,6))
 if len(img_hough.shape) == 2:
     plt.imshow(img_hough, cmap='gray')
@@ -90,23 +90,18 @@ plt.axis("off")
 plt.show()
 
 
-MIN_AREA_cir = 3000  # cambiá este valor según necesites
+
 num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(img_hough, connectivity=8)
 
-
-
-# Creamos una máscara vacía
 mask_filtrada = np.zeros_like(img_hough)
 
 # Recorremos las etiquetas (saltando la 0, que es fondo)
 for label in range(1, num_labels):
     area = stats[label, cv2.CC_STAT_AREA]
 
-    if area >= MIN_AREA_cir:
-        # Copiamos el componente a la máscara
+    if area >= MIN_AREA:
         mask_filtrada[labels == label] = 255
 
-# Mostrar el resultado
 plt.figure(figsize=(6,6))
 plt.imshow(mask_filtrada, cmap='gray')
 plt.title("Componentes filtrados por área")
@@ -115,11 +110,11 @@ plt.show()
 
 
 
-num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_filtrada, connectivity=8)
+_ , _ , stats_final, _ = cv2.connectedComponentsWithStats(mask_filtrada, connectivity=8)
 
 
 
-areas = stats[1:, cv2.CC_STAT_AREA]  # todos menos el fondo
+areas = stats_final[1:, cv2.CC_STAT_AREA]  # todos menos el fondo
 moneda_10 = []
 moneda_50 = []
 moneda_1 = []
