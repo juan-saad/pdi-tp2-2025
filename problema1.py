@@ -256,9 +256,33 @@ plt.axis("off")
 plt.show()
 
 # calcular la cantidad de dados segundo la distancia entre los centroides de los objetos
+num_labels_pips_dados , labels_pips_dados , stats_pips_dados, centroids_pips_dados = cv2.connectedComponentsWithStats(mask_pips_filtrados, connectivity=8)
+dic_pips = {}
+dic_pips = {"dado_1":[(int(centroids_pips_dados[1][0]),int(centroids_pips_dados[1][1]))]}  # inicializo el diccionario con el primer dado
+for label in range(2, num_labels_pips_dados):
+    cx, cy = int(centroids_pips_dados[label][0]), int(centroids_pips_dados[label][1])
+    distancia_menor = float('inf')
+    dado_asignado = None
 
+    for dado, pip in dic_pips.items():
+        for pip_label in pip:           
+            bx, by = int(pip_label[0]), int(pip_label[1])
+            dx = cx - bx
+            dy = cy - by
+            distancia = np.sqrt(dx*dx + dy*dy) # Distancia euclidiana
 
+            if distancia < distancia_menor:
+                distancia_menor = distancia
+                dado_asignado = dado
 
+    if distancia_menor < 200 :  # umbral de distancia para considerar el mismo dado
+        dic_pips[dado_asignado].append((cx,cy))
+    else:
+        dic_pips[f"dado_{len(dic_pips)+1}"] = [(cx,cy)]
+
+print("Cantidad de dados detectados y sus pips:")
+for dado, pips in dic_pips.items():
+    print(f"{dado}: {len(pips)} pips")
 
 
 
