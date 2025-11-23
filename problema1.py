@@ -141,11 +141,6 @@ plt.title("Contornos detectados")
 plt.axis("off")
 plt.show()
 
-# bordes = cv2.Canny(AmB, 50, 150)
-# plt.imshow(bordes, cmap='gray')
-# plt.title("Bordes de la imagen original sin monedas")
-# plt.axis("off")
-
 # Top-hat
 kernel_tophat_dados = cv2.getStructuringElement(cv2.MORPH_RECT, (31, 31))
 img_tophat_dados = cv2.morphologyEx(AmB, kernel=kernel_tophat_dados, op=cv2.MORPH_TOPHAT)
@@ -178,20 +173,7 @@ num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(dados_ca
 
 img_etiquetas = cv2.cvtColor(dados_canny, cv2.COLOR_GRAY2BGR)
 
-for label in range(1, num_labels):
-    x = stats[label, cv2.CC_STAT_LEFT]
-    y = stats[label, cv2.CC_STAT_TOP]
-    w = stats[label, cv2.CC_STAT_WIDTH]
-    h = stats[label, cv2.CC_STAT_HEIGHT]
-    cv2.rectangle(img_etiquetas, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    cx, cy = int(centroids[label][0]), int(centroids[label][1])
-    cv2.putText(img_etiquetas, str(label), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
 
-plt.figure(figsize=(6,6))
-plt.imshow(img_etiquetas)
-plt.title("Objetos detectados en dados_canny con etiquetas")
-plt.axis("off")
-plt.show()
 
 MIN_AREA_DADOS = 180  # Ajusta este valor según el tamaño mínimo que quieras conservar
 MAX_AREA_DADOS = 250
@@ -283,6 +265,60 @@ for label in range(2, num_labels_pips_dados):
 print("Cantidad de dados detectados y sus pips:")
 for dado, pips in dic_pips.items():
     print(f"{dado}: {len(pips)} pips")
+
+
+
+bounding_box_monedas = mask_filtrada
+bounding_box_monedas_canny = cv2.Canny(bounding_box_monedas, 50, 150)
+# Superponer bounding_box_monedas_canny en img_gray y mostrar en verde
+img_superpuesta = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
+
+# Donde hay borde en bounding_box_monedas_canny, ponemos verde
+img_superpuesta[bounding_box_monedas_canny > 0] = [0, 0, 255]
+
+plt.figure(figsize=(6,6))
+plt.imshow(cv2.cvtColor(img_superpuesta, cv2.COLOR_BGR2RGB))
+plt.title("Bounding box monedas (Canny) superpuesto en verde")
+plt.axis("off")
+plt.show()
+
+centros = {}
+
+for nombre_dado, puntos in dic_pips.items():
+    # Convertimos a array numpy
+    puntos_np = np.array(puntos)
+    
+    # Calculamos el promedio (mean) a lo largo del eje 0 (columnas)
+    # Esto nos da [promedio_x, promedio_y]
+    centro = np.mean(puntos_np, axis=0)
+    
+    # Convertimos a enteros si lo necesitas para dibujar con cv2
+    centros[nombre_dado] = tuple(centro.astype(int))
+
+
+# Agregar los contornos agrandados a img_superpuesta
+for nombre_dado, centro in centros.items():
+    label_centro = labels_pips_dados[centro[1], centro[0]]
+    if label_centro == 0:
+        continue
+
+    mask_objeto = np.zeros_like(mask_pips_filtrados)
+    mask_objeto[labels_pips_dados == label_centro] = 255
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (400, 400))
+    mask_objeto_grande = cv2.dilate(mask_objeto, kernel, iterations=1)
+
+    contornos, _ = cv2.findContours(mask_objeto_grande, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(img_superpuesta, contornos, -1, (0,255,0), 2)  # verde
+
+plt.figure(figsize=(6,6))
+plt.imshow(cv2.cvtColor(img_superpuesta, cv2.COLOR_BGR2RGB))
+plt.title("Bounding box monedas y contornos dados superpuestos")
+plt.axis("off")
+plt.show()
+
+
+
 
 
 
