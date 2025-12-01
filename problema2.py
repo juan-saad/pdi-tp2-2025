@@ -87,7 +87,7 @@ def segmentar_patente(
     # Detectamos los bordes con un filtro laplaciano
     kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
     img_laplaciano = cv2.filter2D(imagen_gris, -1, kernel)
-    img_bin = _, img_bin = cv2.threshold(
+    _, img_bin = cv2.threshold(
         img_laplaciano, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
 
@@ -148,9 +148,7 @@ def segmentar_patente(
 
     # Vamos a repetir el proceso de binarización con el crop de la patente reescalado
     crop_gris = cv2.cvtColor(imagen_crop_upscaled, cv2.COLOR_BGR2GRAY)
-    crop_bin = _, img_bin = cv2.threshold(
-        crop_gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
-    )
+    _, crop_bin = cv2.threshold(crop_gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     if mostrar_pasos:
         mostrar_imagen(crop_bin, "CROP BINARIZADO", figsize=(8, 4), cmap="gray")
@@ -214,26 +212,44 @@ def segmentar_patente(
 
     # Preparar imagen con bounding boxes para mostrar al final
     img_color = None
+    caracteres_extraidos = []
     if len(valid_bboxes) == num_caracteres_esperados:
         # Ordenar los bounding boxes de izquierda a derecha segun la coordenada x
         valid_bboxes.sort(key=lambda bbox: bbox[0])
 
         h_img, w_img = crop_bin.shape[:2]
-        img_color = cv2.cvtColor(crop_bin, cv2.COLOR_GRAY2BGR)
 
+        # Extraer cada carácter por separado
         for bx, by, bw, bh in valid_bboxes:
             x_inicio = max(0, bx - char_margin)
             y_inicio = max(0, by - char_margin)
             x_fin = min(w_img, bx + bw + char_margin)
             y_fin = min(h_img, by + bh + char_margin)
 
-            cv2.rectangle(
-                img_color,
-                (x_inicio, y_inicio),
-                (x_fin, y_fin),
-                (0, 0, 255),
-                10,
+            # Recortar el carácter de la imagen binarizada
+            char_crop = crop_bin[y_inicio:y_fin, x_inicio:x_fin]
+            caracteres_extraidos.append(char_crop)
+
+        # Crear una imagen con todos los caracteres concatenados horizontalmente
+        # Agregar padding entre caracteres
+        padding = 50
+        total_width = (
+            sum(c.shape[1] for c in caracteres_extraidos)
+            + (len(caracteres_extraidos) - 1) * padding
+        )
+        max_height = max(c.shape[0] for c in caracteres_extraidos)
+
+        img_color = np.ones((max_height, total_width), dtype=np.uint8) * 255
+
+        x_offset = 0
+        for char_crop in caracteres_extraidos:
+            h_char, w_char = char_crop.shape
+            # Centrar verticalmente el carácter
+            y_offset = (max_height - h_char) // 2
+            img_color[y_offset : y_offset + h_char, x_offset : x_offset + w_char] = (
+                char_crop
             )
+            x_offset += w_char + padding
 
     return valid_bboxes, crop_bin, img_color
 
@@ -282,7 +298,7 @@ if __name__ == "__main__":
                 axes_flat.append(row)
 
         for idx, (filename, img_color) in enumerate(resultados):
-            axes_flat[idx].imshow(cv2.cvtColor(img_color, cv2.COLOR_BGR2RGB))
+            axes_flat[idx].imshow(img_color, cmap="gray")
             axes_flat[idx].set_title(filename)
             axes_flat[idx].axis("off")
 
