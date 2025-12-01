@@ -87,9 +87,10 @@ def segmentar_patente(
         num_caracteres_esperados: Número de caracteres esperados en la patente (default: 6).
 
     Returns:
-        Tupla (valid_bboxes, crop_bin) donde:
+        Tupla (valid_bboxes, crop_bin, img_color) donde:
             - valid_bboxes: Lista de bounding boxes de los caracteres detectados.
             - crop_bin: Imagen binarizada del crop de la patente reescalada.
+            - img_color: Imagen con bounding boxes dibujados en color.
     """
     if img is None:
         raise FileNotFoundError("No se pudo cargar la imagen")
@@ -136,7 +137,7 @@ def segmentar_patente(
         print(
             "No se encontró ningún componente que cumpla con los criterios de filtrado."
         )
-        return [], None
+        return [], None, None
 
     # Con las coordenadas del bounding box de la patente, recortamos la imagen original
     x, y, w, h = bbox_patente
@@ -221,41 +222,36 @@ def segmentar_patente(
             img_con_chars, f"Componentes Válidos Detectados: {len(valid_bboxes)}"
         )
 
-    # Si existen los bounding boxes validos esperados, procedemos a recortar y mostrar cada caracter individualmente
-    # NOTA: El recorte se hace sobre el crop binarizado ya que es donde se visualizan mas claramente los caracteres
+    # Preparar imagen con bounding boxes para mostrar al final
+    img_color = None
     if len(valid_bboxes) == num_caracteres_esperados:
         # Ordenar los bounding boxes de izquierda a derecha segun la coordenada x
         valid_bboxes.sort(key=lambda bbox: bbox[0])
 
-        # Mostrar los caracteres segmentados en una fila
-        n_chars = len(valid_bboxes)
-        fig, axes = plt.subplots(1, n_chars, figsize=(15, 3))
-        fig.suptitle("Segmentación Final de Caracteres", fontsize=16)
-
-        # Asegurar que axes sea iterable incluso con un solo caracter
-        if n_chars == 1:
-            axes = [axes]
-
+        # Convertir la imagen binarizada a BGR para poder dibujar en color
         h_img, w_img = crop_bin.shape[:2]
-        for i, (bx, by, bw, bh) in enumerate(valid_bboxes):
-            # Recortar con margen adicional respetando los límites de la imagen
+        img_color = cv2.cvtColor(crop_bin, cv2.COLOR_GRAY2BGR)
+
+        # Dibujar los bounding boxes en COLOR (por ejemplo rojo)
+        for bx, by, bw, bh in valid_bboxes:
             x_inicio = max(0, bx - char_margin)
             y_inicio = max(0, by - char_margin)
             x_fin = min(w_img, bx + bw + char_margin)
             y_fin = min(h_img, by + bh + char_margin)
-            caracter_crop = crop_bin[y_inicio:y_fin, x_inicio:x_fin]
 
-            axes[i].imshow(caracter_crop, cmap="gray")
-            axes[i].set_title(f"Carácter {i + 1}")
-            axes[i].axis("off")
-
-        plt.show(block=False)
+            cv2.rectangle(
+                img_color,
+                (x_inicio, y_inicio),
+                (x_fin, y_fin),
+                (0, 0, 255),
+                10,
+            )
     else:
         print(
             f"NO SE ENCONTRÓ LA PATENTE (se encontraron {len(valid_bboxes)} caracteres, se esperaban {num_caracteres_esperados})"
         )
 
-    return valid_bboxes, crop_bin
+    return valid_bboxes, crop_bin, img_color
 
 
 if __name__ == "__main__":
@@ -267,14 +263,52 @@ if __name__ == "__main__":
     imagenes_path = BASE_DIR / "imagenes"
     patentes = sorted(p for p in imagenes_path.glob("img*.png"))
 
+    # Acumular resultados de todas las imágenes
+    resultados = []
+    
     for i, p in enumerate(patentes):
         imagen = cv2.imread(str(p))
 
         # Llamada básica con visualización
-        bboxes, crop_bin = segmentar_patente(imagen, mostrar_pasos=False)
+        bboxes, crop_bin, img_color = segmentar_patente(imagen, mostrar_pasos=False)
+        
+        if img_color is not None:
+            resultados.append((p.name, img_color))
+    
+    if resultados:
+        num_imagenes = len(resultados)
+        
+        # Calcular filas y columnas para un layout más compacto
+        cols = min(3, num_imagenes)
+        rows = (num_imagenes + cols - 1) // cols
+        
+        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
+        
+        if num_imagenes == 1:
+            axes = [[axes]]
+        elif rows == 1:
+            axes = [axes]
+        
+        axes_flat = []
+        for row in axes:
+            if isinstance(row, np.ndarray):
+                axes_flat.extend(row)
+            else:
+                axes_flat.append(row)
+        
+        for idx, (filename, img_color) in enumerate(resultados):
+            axes_flat[idx].imshow(cv2.cvtColor(img_color, cv2.COLOR_BGR2RGB))
+            axes_flat[idx].set_title(filename)
+            axes_flat[idx].axis("off")
+        
+        # Ocultar los ejes no utilizados
+        for idx in range(len(resultados), len(axes_flat)):
+            axes_flat[idx].axis("off")
+        
+        plt.show(block=False)
 
     # Ejemplo de uso con parámetros personalizados:
-    # bboxes, crop_bin = segmentar_patente(
+    # bboxes, crop_bin, img_color = segmentar_patente(
     #     imagen,
     #     mostrar_pasos=False,          # Sin visualización
     #     scale_factor=50,              # Escala diferente
