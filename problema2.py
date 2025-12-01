@@ -4,20 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def binarizar_otsu(imagen):
-    """
-    Binariza una imagen usando el método de Otsu.
-
-    Args:
-        imagen: Imagen en escala de grises.
-
-    Returns:
-        Imagen binarizada.
-    """
-    _, img_bin = cv2.threshold(imagen, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return img_bin
-
-
 def mostrar_imagen(imagen, titulo="Imagen", figsize=(8, 8), cmap=None, block=False):
     """
     Muestra una imagen con matplotlib.
@@ -101,7 +87,9 @@ def segmentar_patente(
     # Detectamos los bordes con un filtro laplaciano
     kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
     img_laplaciano = cv2.filter2D(imagen_gris, -1, kernel)
-    img_bin = binarizar_otsu(img_laplaciano)
+    img_bin = _, img_bin = cv2.threshold(
+        img_laplaciano, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )
 
     # Encontrar la patente usando componentes conectados
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
@@ -160,7 +148,9 @@ def segmentar_patente(
 
     # Vamos a repetir el proceso de binarización con el crop de la patente reescalado
     crop_gris = cv2.cvtColor(imagen_crop_upscaled, cv2.COLOR_BGR2GRAY)
-    crop_bin = binarizar_otsu(crop_gris)
+    crop_bin = _, img_bin = cv2.threshold(
+        crop_gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )
 
     if mostrar_pasos:
         mostrar_imagen(crop_bin, "CROP BINARIZADO", figsize=(8, 4), cmap="gray")
@@ -192,13 +182,13 @@ def segmentar_patente(
 
     # Ahora vamos a segmentar los caracteres individuales dentro del crop de la patente
     # Obtenemos las dimensiones de la imagen para el filtrado relativo
-    # Queremos que la altura sea significativa, por ejemplo, entre el 40% y el 100% de la altura total.
-    # Descartar ruido muy pequeño. El área mínima debe ser > 500 píxeles.
     num_labels, labels, stats_chars, centroids = cv2.connectedComponentsWithStats(
         morph_trimmed, connectivity=8
     )
     H, W = morph_trimmed.shape
 
+    # Queremos que la altura sea significativa, por ejemplo, entre el 40% y el 100% de la altura total.
+    # Descartamos ruido con un area mínima y con area de 500 pixeles
     min_char_height = H * 0.40
     max_char_height = H * 1.00
     min_area_threshold = 500
@@ -228,11 +218,9 @@ def segmentar_patente(
         # Ordenar los bounding boxes de izquierda a derecha segun la coordenada x
         valid_bboxes.sort(key=lambda bbox: bbox[0])
 
-        # Convertir la imagen binarizada a BGR para poder dibujar en color
         h_img, w_img = crop_bin.shape[:2]
         img_color = cv2.cvtColor(crop_bin, cv2.COLOR_GRAY2BGR)
 
-        # Dibujar los bounding boxes en COLOR (por ejemplo rojo)
         for bx, by, bw, bh in valid_bboxes:
             x_inicio = max(0, bx - char_margin)
             y_inicio = max(0, by - char_margin)
@@ -246,10 +234,6 @@ def segmentar_patente(
                 (0, 0, 255),
                 10,
             )
-    else:
-        print(
-            f"NO SE ENCONTRÓ LA PATENTE (se encontraron {len(valid_bboxes)} caracteres, se esperaban {num_caracteres_esperados})"
-        )
 
     return valid_bboxes, crop_bin, img_color
 
@@ -263,49 +247,59 @@ if __name__ == "__main__":
     imagenes_path = BASE_DIR / "imagenes"
     patentes = sorted(p for p in imagenes_path.glob("img*.png"))
 
-    # Acumular resultados de todas las imágenes
     resultados = []
-    
+    patentes_no_detectadas = {}
+
     for i, p in enumerate(patentes):
         imagen = cv2.imread(str(p))
 
-        # Llamada básica con visualización
+        # Proceso principal para segmentar las patentes
         bboxes, crop_bin, img_color = segmentar_patente(imagen, mostrar_pasos=False)
-        
+
         if img_color is not None:
             resultados.append((p.name, img_color))
-    
+        else:
+            patentes_no_detectadas[p.name] = str(p)
+
     if resultados:
         num_imagenes = len(resultados)
-        
-        # Calcular filas y columnas para un layout más compacto
+
         cols = min(3, num_imagenes)
         rows = (num_imagenes + cols - 1) // cols
-        
+
         fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        
+
         if num_imagenes == 1:
             axes = [[axes]]
         elif rows == 1:
             axes = [axes]
-        
+
         axes_flat = []
         for row in axes:
             if isinstance(row, np.ndarray):
                 axes_flat.extend(row)
             else:
                 axes_flat.append(row)
-        
+
         for idx, (filename, img_color) in enumerate(resultados):
             axes_flat[idx].imshow(cv2.cvtColor(img_color, cv2.COLOR_BGR2RGB))
             axes_flat[idx].set_title(filename)
             axes_flat[idx].axis("off")
-        
-        # Ocultar los ejes no utilizados
+
         for idx in range(len(resultados), len(axes_flat)):
             axes_flat[idx].axis("off")
-        
+
         plt.show(block=False)
+
+    # Mostrar patentes no detectadas
+    if patentes_no_detectadas:
+        print("\n" + "=" * 70)
+        print("PATENTES NO DETECTADAS:")
+        print("=" * 70)
+        for filename, filepath in patentes_no_detectadas.items():
+            print(f"  • {filename}")
+            print(f"    Path: {filepath}")
+        print("=" * 70 + "\n")
 
     # Ejemplo de uso con parámetros personalizados:
     # bboxes, crop_bin, img_color = segmentar_patente(
