@@ -133,14 +133,14 @@ def main():
     AmB = img_gray.copy()
     AmB[mask_filtrada>0]=0
     plt.imshow(AmB, cmap='gray')
-    plt.title("Contornos detectados")
+    plt.title("Dados sin monedas")
     plt.axis("off")
     plt.show()
 
     # Aplicamos canny
     dados_canny = cv2.Canny(AmB, 50, 150)
     plt.imshow(dados_canny, cmap='gray')
-    plt.title("Contornos detectados")
+    plt.title("Contornos canny dados")
     plt.axis("off")
     plt.show()
 
@@ -163,7 +163,7 @@ def main():
 
     plt.figure(figsize=(6,6))
     plt.imshow(mask_dados_filtrados, cmap='gray')
-    plt.title("Dados filtrados por área mínima")
+    plt.title("Contornos de dados filtrados por área mínima")
     plt.axis("off")
     plt.show()
 
@@ -192,7 +192,7 @@ def main():
         plt.imshow(img_daditos, cmap='gray')
     else:
         plt.imshow(cv2.cvtColor(img_daditos, cv2.COLOR_BGR2RGB))
-    plt.title("Círculos detectados y completados con Hough")
+    plt.title("Pips detectados y completados con Hough")
     plt.axis("off")
     plt.show()
 
@@ -260,7 +260,7 @@ def main():
 
     plt.figure(figsize=(6,6))
     plt.imshow(cv2.cvtColor(img_superpuesta, cv2.COLOR_BGR2RGB))
-    plt.title("Bounding box monedas (Canny grueso) superpuesto en verde")
+    plt.title("Bounding box monedas")
     plt.axis("off")
     plt.show()
 
@@ -290,7 +290,7 @@ def main():
 
     plt.figure(figsize=(6,6))
     plt.imshow(cv2.cvtColor(img_superpuesta, cv2.COLOR_BGR2RGB))
-    plt.title("Bounding box monedas y contornos dados superpuestos")
+    plt.title("Bounding box monedas y dados")
     plt.axis("off")
     plt.show()
 
